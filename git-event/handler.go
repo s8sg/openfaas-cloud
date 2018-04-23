@@ -60,11 +60,17 @@ func Handle(req []byte) string {
 
 func garbageCollect(garbageRequests []GarbageRequest) error {
 	client := http.Client{}
+
+	gatewayURL := os.Getenv("gateway_url")
+	if len(gatewayURL) == 0 {
+		gatewayURL = "http://gateway:8080"
+	}
+
 	for _, garbageRequest := range garbageRequests {
 
 		body, _ := json.Marshal(garbageRequest)
 		bodyReader := bytes.NewReader(body)
-		req, _ := http.NewRequest(http.MethodPost, "http://gateway:8080/function/garbage-collect", bodyReader)
+		req, _ := http.NewRequest(http.MethodPost, gatewayURL+"/function/garbage-collect", bodyReader)
 		res, err := client.Do(req)
 		if err != nil {
 			return err

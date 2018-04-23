@@ -123,6 +123,9 @@ func getCustomers(customerURL string) ([]string, error) {
 
 func postEvent(pushEvent sdk.PushEvent) (int, error) {
 	gatewayURL := os.Getenv("gateway_url")
+	if len(gatewayURL) == 0 {
+		gatewayURL = "http://gateway:8080"
+	}
 
 	body, _ := json.Marshal(pushEvent)
 

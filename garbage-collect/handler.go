@@ -7,8 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
+
+var gatewayURL string
 
 // Handle a serverless request
 func Handle(req []byte) string {
@@ -18,6 +21,12 @@ func Handle(req []byte) string {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	gatewayURL = os.Getenv("gateway_url")
+	if len(gatewayURL) == 0 {
+		gatewayURL = "http://gateway:8080"
+	}
+
 	fmt.Println("garbageReq", garbageReq)
 	list, err := listFunctions(garbageReq.Owner)
 	if err != nil {
@@ -63,7 +72,7 @@ func deleteFunction(target string) error {
 
 	bytesReq, _ := json.Marshal(delReq)
 	bufferReader := bytes.NewBuffer(bytesReq)
-	request, _ := http.NewRequest(http.MethodDelete, "http://gateway:8080/system/functions", bufferReader)
+	request, _ := http.NewRequest(http.MethodDelete, gatewayURL+"/system/functions", bufferReader)
 
 	response, err := c.Do(request)
 
@@ -89,7 +98,7 @@ func listFunctions(owner string) ([]string, error) {
 		Timeout: time.Second * 3,
 	}
 
-	request, _ := http.NewRequest(http.MethodGet, "http://gateway:8080/system/functions", nil)
+	request, _ := http.NewRequest(http.MethodGet, gatewayURL+"/system/functions", nil)
 
 	response, err := c.Do(request)
 

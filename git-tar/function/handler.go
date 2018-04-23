@@ -13,6 +13,8 @@ import (
 	"github.com/openfaas/faas-cli/stack"
 )
 
+var gatewayURL string
+
 // Handle a serverless request
 func Handle(req []byte) []byte {
 
@@ -33,6 +35,11 @@ func Handle(req []byte) []byte {
 	if err != nil {
 		log.Println("parseYAML ", err.Error())
 		os.Exit(-1)
+	}
+
+	gatewayURL = os.Getenv("gateway_url")
+	if len(gatewayURL) == 0 {
+		gatewayURL = "http://gateway:8080"
 	}
 
 	var shrinkWrapPath string
@@ -80,7 +87,8 @@ func collect(pushEvent PushEvent, stack *stack.Services) error {
 
 	bytesReq, _ := json.Marshal(garbageReq)
 	bufferReader := bytes.NewBuffer(bytesReq)
-	request, _ := http.NewRequest(http.MethodPost, "http://gateway:8080/function/garbage-collect", bufferReader)
+
+	request, _ := http.NewRequest(http.MethodPost, gatewayURL+"/function/garbage-collect", bufferReader)
 
 	response, err := c.Do(request)
 

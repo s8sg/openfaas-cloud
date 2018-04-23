@@ -194,7 +194,7 @@ func deploy(tars []tarEntry, owner string, repo string) error {
 			return err
 		}
 
-		httpReq, _ := http.NewRequest(http.MethodPost, "http://gateway:8080/function/buildshiprun", fileOpen)
+		httpReq, _ := http.NewRequest(http.MethodPost, gatewayURL+"/function/buildshiprun", fileOpen)
 
 		httpReq.Header.Add("Repo", repo)
 		httpReq.Header.Add("Owner", owner)
