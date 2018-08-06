@@ -80,10 +80,31 @@ func TestBuildURLWithUndefinedStatusGivesOriginalURL(t *testing.T) {
 }
 
 func TestTokenValidator(t *testing.T) {
-	testTokens := map[string]bool{"token with space": false, "token$With@special=Char": false, "v1.afbce39asdasd8be30123317cef123321ae991cf40f7": true, "token=v1.afbce39asdasd8be30123": false, " ": false}
+	testTokens := map[string]bool{
+		"token with space":                                false,
+		"token$With@special=Char":                         false,
+		"v1.afbce39asdasd8be30123317cef123321ae991cf40f7": true,
+		"token=v1.afbce39asdasd8be30123":                  false,
+		" ": false}
 	for token, result := range testTokens {
 		if sdk.ValidToken(token) != result {
 			t.Errorf("validating token %s: want %v, got %v", token, result, !result)
+		}
+	}
+}
+
+func TestTokenMarshal(t *testing.T) {
+	testTokens := map[string]string{
+		"token with space":                                sdk.EmptyAuthToken,
+		"token$With@special=Char":                         sdk.EmptyAuthToken,
+		"v1.afbce39asdasd8be30123317cef123321ae991cf40f7": "v1.afbce39asdasd8be30123317cef123321ae991cf40f7",
+		"token=v1.afbce39asdasd8be30123":                  sdk.EmptyAuthToken,
+		" ": sdk.EmptyAuthToken}
+	for token, result := range testTokens {
+		marshaledToken := sdk.MarshalToken(token)
+		unmarshaledToken := sdk.UnmarshalToken([]byte(marshaledToken))
+		if unmarshaledToken != result {
+			t.Errorf("validating token %s: want %s, got %s", token, result, unmarshaledToken)
 		}
 	}
 }
@@ -94,7 +115,7 @@ func TestStatusCreation(t *testing.T) {
 		Service: "tester",
 		URL:     "http://original-value.local",
 	}
-	status := sdk.BuildStatus(event, "")
+	status := sdk.BuildStatus(event, sdk.EmptyAuthToken)
 	if status == nil {
 		t.Errorf("validating status creation: got %v", status)
 	}
@@ -128,7 +149,7 @@ func TestStatusAddition(t *testing.T) {
 		Service: "tester",
 		URL:     "http://original-value.local",
 	}
-	status := sdk.BuildStatus(event, "")
+	status := sdk.BuildStatus(event, sdk.EmptyAuthToken)
 	status.AddStatus(sdk.Pending, "description stack", sdk.Stack)
 	status.AddStatus(sdk.Success, "description func", sdk.FunctionContext("func"))
 
@@ -167,7 +188,7 @@ func TestStatusOverwriteForSameContext(t *testing.T) {
 		Service: "tester",
 		URL:     "http://original-value.local",
 	}
-	status := sdk.BuildStatus(event, "")
+	status := sdk.BuildStatus(event, sdk.EmptyAuthToken)
 	status.AddStatus(sdk.Pending, "description stack pending", sdk.Stack)
 	status.AddStatus(sdk.Pending, "description func pending", sdk.FunctionContext("func"))
 	status.AddStatus(sdk.Success, "description stack success", sdk.Stack)
@@ -257,7 +278,7 @@ func TestStatusReportFailure(t *testing.T) {
 		Service: "tester",
 		URL:     "http://original-value.local",
 	}
-	status := sdk.BuildStatus(event, "")
+	status := sdk.BuildStatus(event, sdk.EmptyAuthToken)
 	status.AddStatus(sdk.Pending, "description stack", sdk.Stack)
 
 	gateway := "invalid:8080/"

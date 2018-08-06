@@ -96,7 +96,7 @@ func Handle(req []byte) string {
 	serviceValue := fmt.Sprintf("%s-%s", pushEvent.Repository.Owner.Login, pushEvent.Repository.Name)
 
 	eventInfo := sdk.BuildEventFromPushEvent(pushEvent)
-	status := sdk.BuildStatus(eventInfo, "")
+	status := sdk.BuildStatus(eventInfo, sdk.EmptyAuthToken)
 	status.AddStatus(sdk.Pending, fmt.Sprintf("%s stack deploy is in progress", serviceValue), sdk.Stack)
 	reportStatus(status)
 

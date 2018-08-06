@@ -38,7 +38,7 @@ func Handle(req []byte) string {
 	serviceValue = status.EventInfo.Owner + "-" + status.EventInfo.Repository
 
 	// use auth token if provided
-	if status.AuthToken != "" && sdk.ValidToken(status.AuthToken) {
+	if status.AuthToken != sdk.EmptyAuthToken && sdk.ValidToken(status.AuthToken) {
 		token = status.AuthToken
 		log.Printf("reusing provided auth token")
 	} else {
@@ -62,6 +62,9 @@ func Handle(req []byte) string {
 			log.Fatalf("failed to report status %v, error: %s", status, err.Error())
 		}
 	}
+
+	// marshal token
+	token = sdk.MarshalToken(token)
 
 	// return auth token so that it can be reused form a same function
 	return token

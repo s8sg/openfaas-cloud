@@ -48,7 +48,6 @@ functions:
       write_timeout: 5m
       write_debug: true
       read_debug: true
-      builder_url: http://of-builder.openfaas:8080/
     environment_file:
       - buildshiprun_limits_k8s.yml
       - gateway_config.yml
@@ -102,6 +101,8 @@ functions:
       - github.yml
     secrets:
       - private-key
+      - basic-auth-user
+      - basic-auth-password
 
   github-event:
     lang: go

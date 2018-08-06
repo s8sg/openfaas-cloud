@@ -27,7 +27,7 @@ func Handle(req []byte) []byte {
 	}
 
 	statusEvent := sdk.BuildEventFromPushEvent(pushEvent)
-	status := sdk.BuildStatus(statusEvent, "")
+	status := sdk.BuildStatus(statusEvent, sdk.EmptyAuthToken)
 
 	clonePath, err := clone(pushEvent)
 	if err != nil {

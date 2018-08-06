@@ -72,7 +72,7 @@ func makeTar(pushEvent sdk.PushEvent, filePath string, services *stack.Services)
 
 		if len(pushRepositoryURL) == 0 {
 			fmt.Fprintf(os.Stderr, "push_repository_url env-var not set")
-			os.Exit(1)
+			return nil, fmt.Errorf("push_repository_url env-var not set")
 		}
 
 		imageName := formatImageShaTag(pushRepositoryURL, &v, pushEvent.AfterCommitID,

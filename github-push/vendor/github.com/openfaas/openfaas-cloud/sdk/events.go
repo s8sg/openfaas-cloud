@@ -1,7 +1,5 @@
 package sdk
 
-import ()
-
 // PushEvent as received from GitHub
 type PushEvent struct {
 	Ref        string `json:"ref"`

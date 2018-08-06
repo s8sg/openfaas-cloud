@@ -15,7 +15,7 @@ func TestGetEvent_ReadSecrets(t *testing.T) {
 	os.Setenv("Http_Owner", owner)
 	installation_id := "123456"
 	os.Setenv("Http_Installation_id", installation_id)
-	eventInfo, err := BuildEventFromEnv()
+	eventInfo, err := getEvent()
 	if err != nil {
 		t.Errorf(err.Error())
 		t.Fail()
@@ -36,7 +36,7 @@ func TestGetEvent_ReadSecrets(t *testing.T) {
 }
 
 func TestGetEvent_EmptyEnvVars(t *testing.T) {
-	_, err := BuildEventFromEnv()
+	_, err := getEvent()
 
 	if err != nil {
 		t.Errorf(err.Error())
@@ -90,5 +90,47 @@ func Test_GetImageName(t *testing.T) {
 				t.Errorf("%s failed!. got: %s, want: %s", testcase.Name, output, testcase.Output)
 			}
 		})
+	}
+}
+
+func Test_ValidImage(t *testing.T) {
+	imageNames := map[string]bool{
+		"failed to solve: rpc error: code = Unknown desc = exit code 2":   false,
+		"failed to solve: rpc error: code = Unknown desc = exit status 2": false,
+		"failed to solve:":                                                false,
+		"error:":                                                          false,
+		"code =":                                                          false,
+		"127.0.0.1:5000/someuser/regex_go-regex_py:latest":                                                      true,
+		"registry:5000/someuser/regex_go-regex_py:latest-7f7ec13d12b1397408e54b79686d43e41974bfa0":              true,
+		"127.0.0.1:5000/someuser/regex_go-regex_py:latest-7f7ec13d12b1397408e54b79686d43e41974bfa0":             true,
+		"docker.io/ofcommunity/someuser/regex_go-regex_py:latest-7f7ec13d12b1397408e54b79686d43e41974bfa0":      true,
+		"docker.io:8080/ofcommunity/someuser/regex_go-regex_py:latest-7f7ec13d12b1397408e54b79686d43e41974bfa0": true,
+	}
+	for image, expected := range imageNames {
+		if validImage(image) != expected {
+			t.Errorf("For image %s, got: %v, want: %v", image, !expected, expected)
+		}
+	}
+}
+
+func Test_getReadOnlyRootFS_default(t *testing.T) {
+	os.Setenv("readonly_root_filesystem", "1")
+
+	val := getReadOnlyRootFS()
+	want := true
+	if val != want {
+		t.Errorf("want %t, but got %t", want, val)
+		t.Fail()
+	}
+}
+
+func Test_getReadOnlyRootFS_override(t *testing.T) {
+	os.Setenv("readonly_root_filesystem", "false")
+
+	val := getReadOnlyRootFS()
+	want := false
+	if val != want {
+		t.Errorf("want %t, but got %t", want, val)
+		t.Fail()
 	}
 }

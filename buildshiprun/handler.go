@@ -8,11 +8,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/openfaas/openfaas-cloud/sdk"
+)
+
+var (
+	imageValidator = regexp.MustCompile("(?:[a-zA-Z0-9./]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?/[a-zA-Z0-9./]+(?:[._-][a-z0-9]+)*/)*[a-zA-Z0-9]+(?:[._-][a-z0-9]+)*(?::[a-zA-Z0-9._-]+)?")
 )
 
 // Handle a build / deploy request - returns empty string for an error
@@ -22,7 +27,7 @@ func Handle(req []byte) string {
 
 	builderURL := os.Getenv("builder_url")
 
-	event, eventErr := BuildEventFromEnv()
+	event, eventErr := getEvent()
 	if eventErr != nil {
 		log.Panic(eventErr)
 	}
@@ -36,7 +41,7 @@ func Handle(req []byte) string {
 	serviceValue := fmt.Sprintf("%s-%s", event.Owner, event.Service)
 	log.Printf("%d env-vars for %s", len(event.Environment), serviceValue)
 
-	status := sdk.BuildStatus(event, "")
+	status := sdk.BuildStatus(event, sdk.EmptyAuthToken)
 
 	reader := bytes.NewBuffer(req)
 
@@ -77,7 +82,7 @@ func Handle(req []byte) string {
 
 	log.Printf("buildshiprun: image '%s'\n", imageName)
 
-	if strings.Contains(imageName, "exit status") == true {
+	if !validImage(imageName) {
 		msg := "Unable to build image, check builder logs"
 		status.AddStatus(sdk.Failure, msg, sdk.FunctionContext(event.Service))
 		reportStatus(status)
@@ -99,6 +104,8 @@ func Handle(req []byte) string {
 			defaultMemoryLimit = "20m"
 		}
 
+		readOnlyRootFS := getReadOnlyRootFS()
+
 		deploy := deployment{
 			Service: serviceValue,
 			Image:   imageName,
@@ -115,8 +122,9 @@ func Handle(req []byte) string {
 			Limits: Limits{
 				Memory: defaultMemoryLimit,
 			},
-			EnvVars: event.Environment,
-			Secrets: event.Secrets,
+			EnvVars:                event.Environment,
+			Secrets:                event.Secrets,
+			ReadOnlyRootFilesystem: readOnlyRootFS,
 		}
 
 		gatewayURL := os.Getenv("gateway_url")
@@ -139,6 +147,70 @@ func Handle(req []byte) string {
 	status.AddStatus(sdk.Success, fmt.Sprintf("function successfully deployed as: %s", serviceValue), sdk.FunctionContext(event.Service))
 	reportStatus(status)
 	return fmt.Sprintf("buildStatus %s %s %s", buildStatus, imageName, res.Status)
+}
+
+// readOnlyRootFS defaults to true, override with env-var of readonly_root_filesystem=false
+func getReadOnlyRootFS() bool {
+	readOnly := true
+	if val, exists := os.LookupEnv("readonly_root_filesystem"); exists {
+		if val == "0" || val == "false" {
+			readOnly = false
+		}
+	}
+
+	return readOnly
+}
+
+func getEvent() (*sdk.Event, error) {
+	var err error
+	info := sdk.Event{}
+
+	info.Service = os.Getenv("Http_Service")
+	info.Owner = os.Getenv("Http_Owner")
+	info.Repository = os.Getenv("Http_Repo")
+	info.Sha = os.Getenv("Http_Sha")
+	info.URL = os.Getenv("Http_Url")
+	info.Image = os.Getenv("Http_Image")
+
+	if len(os.Getenv("Http_Installation_id")) > 0 {
+		info.InstallationID, err = strconv.Atoi(os.Getenv("Http_Installation_id"))
+	}
+
+	httpEnv := os.Getenv("Http_Env")
+	envVars := make(map[string]string)
+
+	if len(httpEnv) > 0 {
+		envErr := json.Unmarshal([]byte(httpEnv), &envVars)
+
+		if envErr == nil {
+			info.Environment = envVars
+		} else {
+			log.Printf("Error un-marshaling env-vars for function %s, %s", info.Service, envErr)
+			info.Environment = make(map[string]string)
+		}
+	}
+
+	secretVars := []string{}
+	secretsStr := os.Getenv("Http_Secrets")
+
+	if len(secretsStr) > 0 {
+		secretErr := json.Unmarshal([]byte(secretsStr), &secretVars)
+
+		if secretErr != nil {
+			log.Println(secretErr)
+		}
+
+	}
+
+	info.Secrets = secretVars
+
+	for i := 0; i < len(info.Secrets); i++ {
+		info.Secrets[i] = info.Owner + "-" + info.Secrets[i]
+	}
+
+	log.Printf("%d env-vars for %s", len(info.Environment), info.Service)
+
+	return &info, err
 }
 
 func functionExists(deploy deployment, gatewayURL string, c *http.Client) (bool, error) {
@@ -207,7 +279,11 @@ func deployFunction(deploy deployment, gatewayURL string, c *http.Client) (strin
 	}
 
 	defer res.Body.Close()
+
 	fmt.Println("Deploy status: " + res.Status)
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return "", fmt.Errorf("http status code %d", res.StatusCode)
+	}
 	buildStatus, _ := ioutil.ReadAll(res.Body)
 
 	return string(buildStatus), err
@@ -237,60 +313,13 @@ func getImageName(repositoryURL, pushRepositoryURL, imageName string) string {
 	// return repositoryURL + imageName[strings.Index(imageName, "/"):]
 }
 
-// function to build Event from Environment Variable
-func BuildEventFromEnv() (*sdk.Event, error) {
-	var err error
-	info := sdk.Event{}
-
-	info.Service = os.Getenv("Http_Service")
-	info.Owner = os.Getenv("Http_Owner")
-	info.Repository = os.Getenv("Http_Repo")
-	info.Sha = os.Getenv("Http_Sha")
-	info.URL = os.Getenv("Http_Url")
-	info.InstallationID, err = strconv.Atoi(os.Getenv("Http_Installation_id"))
-	info.Environment = GetEnv(info.Service)
-	info.Secrets = GetSecret(info.Owner, info.Service)
-
-	return &info, err
-}
-
-func GetEnv(service string) map[string]string {
-	envVars := make(map[string]string)
-	envStr := os.Getenv("Http_Env")
-	if len(envStr) > 0 {
-		envErr := json.Unmarshal([]byte(envStr), &envVars)
-		if envErr != nil {
-			log.Printf("error un-marshaling env-vars for function %s, %s", service, envErr)
-		}
+func validImage(image string) bool {
+	match := imageValidator.FindString(image)
+	// image should be the whole string
+	if len(match) == len(image) {
+		return true
 	}
-	return envVars
-}
-
-func GetSecret(owner, service string) []string {
-	secretVars := []string{}
-	secretsStr := os.Getenv("Http_Secrets")
-	if len(secretsStr) > 0 {
-		secretErr := json.Unmarshal([]byte(secretsStr), &secretVars)
-		if secretErr != nil {
-			log.Println("error un-marshaling env-vars for function %s, %s", service, secretErr)
-		}
-	}
-	for i := 0; i < len(secretVars); i++ {
-		secretVars[i] = owner + "-" + secretVars[i]
-	}
-	return secretVars
-}
-
-type eventInfo struct {
-	service        string
-	owner          string
-	repository     string
-	image          string
-	sha            string
-	url            string
-	installationID int
-	environment    map[string]string
-	secrets        []string
+	return false
 }
 
 type deployment struct {
@@ -300,8 +329,9 @@ type deployment struct {
 	Labels  map[string]string
 	Limits  Limits
 	// EnvVars provides overrides for functions.
-	EnvVars map[string]string `json:"envVars"`
-	Secrets []string
+	EnvVars                map[string]string `json:"envVars"`
+	Secrets                []string
+	ReadOnlyRootFilesystem bool `json:"readOnlyRootFilesystem"`
 }
 
 type Limits struct {
