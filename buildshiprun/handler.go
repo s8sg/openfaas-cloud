@@ -50,6 +50,8 @@ func Handle(req []byte) string {
 
 	res, err := c.Do(r)
 
+	log.Printf("Image build status: %d\n", res.StatusCode)
+
 	if err != nil {
 		fmt.Println(err)
 		auditEvent.Message = fmt.Sprintf("buildshiprun failure: %s", err.Error())
@@ -82,7 +84,7 @@ func Handle(req []byte) string {
 
 	log.Printf("buildshiprun: image '%s'\n", imageName)
 
-	if !validImage(imageName) {
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusAccepted {
 		msg := "Unable to build image, check builder logs"
 		status.AddStatus(sdk.StatusFailure, msg, sdk.BuildFunctionContext(event.Service))
 		reportStatus(status)
@@ -106,6 +108,8 @@ func Handle(req []byte) string {
 
 		readOnlyRootFS := getReadOnlyRootFS()
 
+		registryAuth := getRegistryAuthSecret()
+
 		deploy := deployment{
 			Service: serviceValue,
 			Image:   imageName,
@@ -128,6 +132,10 @@ func Handle(req []byte) string {
 		}
 
 		gatewayURL := os.Getenv("gateway_url")
+
+		if len(registryAuth) > 0 {
+			deploy.RegistryAuth = registryAuth
+		}
 
 		result, err := deployFunction(deploy, gatewayURL, c)
 
@@ -334,7 +342,8 @@ type deployment struct {
 	// EnvVars provides overrides for functions.
 	EnvVars                map[string]string `json:"envVars"`
 	Secrets                []string
-	ReadOnlyRootFilesystem bool `json:"readOnlyRootFilesystem"`
+	ReadOnlyRootFilesystem bool   `json:"readOnlyRootFilesystem"`
+	RegistryAuth           string `json:"registryAuth"`
 }
 
 type Limits struct {
@@ -343,4 +352,16 @@ type Limits struct {
 
 type function struct {
 	Name string
+}
+
+func getRegistryAuthSecret() string {
+	path := "/var/openfaas/secrets/registry-auth"
+	if _, err := os.Stat(path); err == nil {
+		res, readErr := ioutil.ReadFile(path)
+		if readErr != nil {
+			log.Printf("Tried to read secret %s, but got error: %s\n", path, readErr)
+		}
+		return strings.TrimSpace(string(res))
+	}
+	return ""
 }
