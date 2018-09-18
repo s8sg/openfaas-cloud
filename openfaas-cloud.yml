@@ -1,0 +1,3 @@
+environment:
+  chain_name: "upload-chain"
+  gateway: "gateway:8080"

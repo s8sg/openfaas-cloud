@@ -3,6 +3,18 @@ provider:
   gateway: http://127.0.0.1:8080
 
 functions:
+
+  openfaas-cloud:
+    lang: faaschain
+    handler: ./openfaas-cloud
+    image: functions/openfaas-cloud:0.6.0
+    environment:
+      read_timeout: 120
+      write_timeout: 120
+      write_debug: true
+      combine_output: false
+
+
   github-push:
     lang: go
     handler: ./github-push
