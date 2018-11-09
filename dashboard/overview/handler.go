@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strings"
 )
 
 type UserData struct {
@@ -32,7 +33,7 @@ func Handle(req []byte) string {
 
 	vals, _ := url.ParseQuery(os.Getenv("Http_Query"))
 
-	user := vals.Get("user")
+	user := strings.ToLower(vals.Get("user"))
 	repo := vals.Get("repo")
 
 	userData1.User = user
